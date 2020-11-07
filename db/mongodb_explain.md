@@ -9,7 +9,7 @@ Para ilustrar melhor o problema vamos supor que temos uma collection de 4 milhõ
 {
 	"_id": ObjectId("")
 	"name": "Daniel",
-	"cpf": "12345678900"
+	"cpf": "12345678900",
 	"age": 28,
 	"occupation": "programmer",
 	"phone": "123456789",
@@ -61,7 +61,66 @@ Aí que entra o [explain()](https://docs.mongodb.com/manual/reference/method/cur
 O explain vai ajudar a gente a entender qual é o plano da consulta:
 ```
 $ db.person.find({name: "Daniel", cpf: "12345678900"}).explain()
-
+{
+	"queryPlanner" : {
+		"plannerVersion" : 1,
+		"namespace" : "db.person",
+		"indexFilterSet" : false,
+		"parsedQuery" : {
+			"$and" : [
+				{
+					"cpf" : {
+						"$eq" : "12345678900"
+					}
+				},
+				{
+					"name" : {
+						"$eq" : "Daniel"
+					}
+				}
+			]
+		},
+		"queryHash" : "3C4EBBFD",
+		"planCacheKey" : "50CE7ABE",
+		"winningPlan" : {
+			"stage" : "FETCH",
+			"inputStage" : {
+				"stage" : "IXSCAN",
+				"keyPattern" : {
+					"name" : 1,
+					"cpf" : 1
+				},
+				"indexName" : "name_1_cpf_1",
+				"isMultiKey" : false,
+				"multiKeyPaths" : {
+					"name" : [ ],
+					"cpf" : [ ]
+				},
+				"isUnique" : false,
+				"isSparse" : false,
+				"isPartial" : false,
+				"indexVersion" : 2,
+				"direction" : "forward",
+				"indexBounds" : {
+					"name" : [
+						"[\"Daniel\", \"Daniel\"]"
+					],
+					"cpf" : [
+						"[\"12345678900\", \"12345678900\"]"
+					]
+				}
+			}
+		},
+		"rejectedPlans" : [ ]
+	},
+	"serverInfo" : {
+		"host" : "PC-002387",
+		"port" : 27017,
+		"version" : "4.2.8",
+		"gitVersion" : "43d25964249164d76d5e04dd6cf38f6111e21f5f"
+	},
+	"ok" : 1
+}
 
 ```
 
