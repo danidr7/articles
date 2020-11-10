@@ -196,7 +196,7 @@ Já o estágio **IXSCAN** executa o *scanner* nas chaves do index, ou seja, se t
 
 Podemos notar que no *winningPlan* do exemplo existem 2 estágios, o de **FETCH** e o de **IXSCAN**. Então já sabemos que um índice está sendo usado, o nome do índice pode ser identificado no campo *indexName*.
 
-Agora vamos dar uma olhada no *executionStats*:
+Agora vamos dar uma olhada em alguns campos do *executionStats*:
 ```
 "executionStats" : {
 	"executionSuccess" : true,
@@ -211,7 +211,7 @@ Agora vamos dar uma olhada no *executionStats*:
 - **executionStats.totalKeysExamined**: é o número de chaves examinadas, ou seja, vai ser maior que 0 quando o **IXSCAN** for usado
 - **executionStats.totalDocsExamined**: é o número de documentos examinados, quando o primeiro *stage* é de **FETCH**, então este será o mesmo número de documentos retornados
 
-Então podemos concluir que o resultado dessa consulta foi bom, pois para 1 resultado retornado foi examinado apenas 1 chave, ou seja, esse index cobre perfeitamente no consulta.
+Levando em consideração os números do *executionStats*, podemos concluir que o resultado dessa consulta foi bom, pois para 1 resultado retornado foi examinado apenas 1 chave, ou seja, esse index cobre perfeitamente a consulta.
 
 
 
