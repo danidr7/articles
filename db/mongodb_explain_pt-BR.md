@@ -192,7 +192,7 @@ Dentro do *winningPlan* são especificados os estágios da consulta. Vamos abord
 - **IXSCAN**: estágio responsável por escanear as chaves dos índices
 
 Explicando de uma maneira mais objetiva, quando temos um *inputStage* de **COLLSCAN** significa que nesse estágio a collection foi escaneada documento por documento, ou seja, não fez uso do índice.
-Já o estágio **IXSCAN** executa o *scanner* nas chaves do index, ou seja, se trata de uma busca mais performática port escanear dados estruturados.
+Já o estágio **IXSCAN** executa o *scanner* nas chaves do index, ou seja, se trata de uma busca mais performática por escanear dados estruturados.
 
 Podemos notar que no *winningPlan* do exemplo existem 2 estágios, o de **FETCH** e o de **IXSCAN**. Então já sabemos que um índice está sendo usado, o nome do índice pode ser identificado no campo *indexName*.
 
@@ -213,6 +213,171 @@ Agora vamos dar uma olhada em alguns campos do *executionStats*:
 
 Levando em consideração os números do *executionStats*, podemos concluir que o resultado dessa consulta foi bom, pois para 1 resultado retornado foi examinado apenas 1 chave, ou seja, esse index cobre perfeitamente a consulta.
 
+Após concluir que a primeira query estava 'performando' corretamente, realizei a mesma análise da segunda query:
+```
+$ db.person.find({occupation: "programmer", cpf: "12345678900"}).explain("executionStats")
+{
+	"queryPlanner" : {
+		"plannerVersion" : 1,
+		"namespace" : "test.person",
+		"indexFilterSet" : false,
+		"parsedQuery" : {
+			"$and" : [
+				{
+					"cpf" : {
+						"$eq" : "12345678900"
+					}
+				},
+				{
+					"occupation" : {
+						"$eq" : "programmer"
+					}
+				}
+			]
+		},
+		"winningPlan" : {
+			"stage" : "FETCH",
+			"filter" : {
+				"cpf" : {
+					"$eq" : "12345678900"
+				}
+			},
+			"inputStage" : {
+				"stage" : "IXSCAN",
+				"keyPattern" : {
+					"occupation" : 1
+				},
+				"indexName" : "occupation_1",
+				"isMultiKey" : false,
+				"multiKeyPaths" : {
+					"occupation" : [ ]
+				},
+				"isUnique" : false,
+				"isSparse" : false,
+				"isPartial" : false,
+				"indexVersion" : 2,
+				"direction" : "forward",
+				"indexBounds" : {
+					"occupation" : [
+						"[\"programmer\", \"programmer\"]"
+					]
+				}
+			}
+		},
+		"rejectedPlans" : [ ]
+	},
+	"executionStats" : {
+		"executionSuccess" : true,
+		"nReturned" : 1,
+		"executionTimeMillis" : 1101,
+		"totalKeysExamined" : 799296,
+		"totalDocsExamined" : 799296,
+		"executionStages" : {
+			"stage" : "FETCH",
+			"executionTimeMillisEstimate" : 50,
+			"docsExamined" : 799296,
+			"filter" : {
+				"cpf" : {
+					"$eq" : "12345678900"
+				}
+			},
+			"nReturned" : 1,
+			"works" : 799297,
+			"advanced" : 1,
+			"needTime" : 799295,
+			"needYield" : 0,
+			"saveState" : 6244,
+			"restoreState" : 6244,
+			"isEOF" : 1,
+			"alreadyHasObj" : 0,
+			"inputStage" : {
+				"stage" : "IXSCAN",
+				"nReturned" : 799296,
+				"executionTimeMillisEstimate" : 18,
+				"works" : 799297,
+				"advanced" : 799296,
+				"needTime" : 0,
+				"needYield" : 0,
+				"saveState" : 6244,
+				"restoreState" : 6244,
+				"isEOF" : 1,
+				"keyPattern" : {
+					"occupation" : 1
+				},
+				"indexName" : "occupation_1",
+				"isMultiKey" : false,
+				"multiKeyPaths" : {
+					"occupation" : [ ]
+				},
+				"isUnique" : false,
+				"isSparse" : false,
+				"isPartial" : false,
+				"indexVersion" : 2,
+				"direction" : "forward",
+				"indexBounds" : {
+					"occupation" : [
+						"[\"programmer\", \"programmer\"]"
+					]
+				},
+				"keysExamined" : 799296,
+				"seeks" : 1,
+				"dupsTested" : 0,
+				"dupsDropped" : 0
+			}
+		}
+	},
+	"serverInfo" : {
+		"host" : "PC-002387",
+		"port" : 27017,
+		"version" : "4.2.8",
+		"gitVersion" : "43d25964249164d76d5e04dd6cf38f6111e21f5f"
+	},
+	"ok" : 1
+}
+```
+
+Podemos ver que, assim como na query anterior, no *winningPlan* temos o estágio de **IXSCAN** e o de **FETCH**, então sabemos que um índice está sendo usado.
+Vamos analisar o *executionStats*:
+```
+"executionStats" : {
+		"nReturned" : 1,
+		"executionTimeMillis" : 1101,
+		"totalKeysExamined" : 799296,
+		"totalDocsExamined" : 799296,
+```
+
+Agora sim percebe-se nitidamente uma quantidade absurda de documentos analisados e um tempo de execução (*executionTimeMillis*) bem maior que na query anterior.
+
+Para entender o que aconteceu, é necessário observar o *executionStages*.
+Como dito antes, o plano da query contém 2 estágios, vamos começar analisando o **IXSCAN** (a forma correta de leitura do plano é do estágio mais aninhado para fora):
+```
+"inputStage" : {
+				"stage" : "IXSCAN",
+				"nReturned" : 799296,
+				"executionTimeMillisEstimate" : 18,
+				"works" : 799297,
+				"advanced" : 799296,
+				"needTime" : 0,
+				"needYield" : 0,
+				"saveState" : 6244,
+				"restoreState" : 6244,
+				"isEOF" : 1,
+				"keyPattern" : {
+					"occupation" : 1
+				},
+				"indexName" : "occupation_1",
+```
+
+No **IXSCAN** nota-se que foi usado o índice do campo *occupation*, porém foram retornados *799296* documentos nesse estágio. O motivo desse resultado é que o índice contempla apenas 1 dos 2 campos pesquisados, então ele pode ajudar apenas filtrando o `occupation`, que por sua vez, retornou todos os *799296* documentos com *occupation* igual a *programmer*.
+
+```
+"executionStages" : {
+			"stage" : "FETCH",
+			"docsExamined" : 799296,
+			"nReturned" : 1,
+```
+
+Agora no estágio **FETCH** o scanner precisou examinar todos os *799296* documentos para retornar apenas 1, ou seja, o scanner tá tendo muito documento para examinar, vamos tentar melhorar o índice para otimizar esse trabalho!
 
 
 
