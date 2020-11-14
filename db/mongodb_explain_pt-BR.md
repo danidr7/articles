@@ -4,11 +4,11 @@ Recentemente no trabalho me deparei com uma collection no MongoDB que apresentou
 
 O problema só foi identificado com a ajuda do [Sysdig](https://sysdig.com/), que apresentou as collection mais lentas do DB, e que para minha surpresa aquela era a collection com mais lentidão. [Você pode ler mais sobre como configurar um agente do sysdig no mongoDB clicando aqui](https://docs.sysdig.com/en/mongodb.html).
 
-Para ilustrar melhor o problema vamos supor que temos uma collection de 4 milhões de pessoas com o seguinte modelo:
+Para ilustrar melhor a situação, vamos supor que temos uma collection de 4 milhões de pessoas com o seguinte modelo:
 ```
 {
-	"_id": ObjectId("")
-	"name": "Daniel",
+	"_id": ObjectId("5fab44b1153579ed0dacdb88")
+	"name": "danidr7",
 	"cpf": "12345678900",
 	"age": 28,
 	"occupation": "programmer",
@@ -19,7 +19,7 @@ Para ilustrar melhor o problema vamos supor que temos uma collection de 4 milhõ
 
 A primeira coisa que fiz foi identificar quais campos estavam sendo consultados naquela collection:
 ```
-1. db.person.find({name: "Daniel", cpf: "12345678900"})
+1. db.person.find({name: "danidr7", cpf: "12345678900"})
 2. db.person.find({occupation: "programmer", cpf: "12345678900"})
 ```
 
@@ -60,7 +60,7 @@ Beleza, a gente tem um índice composto de 'name' e 'cpf' e outro índice indivi
 Aí que entra o [explain()](https://docs.mongodb.com/manual/reference/method/cursor.explain/)!
 O explain vai ajudar a gente a investigar o plano da consulta:
 ```
-$ db.person.find({name: "Daniel", cpf: "12345678900"}).explain("executionStats")
+$ db.person.find({name: "danidr7", cpf: "12345678900"}).explain("executionStats")
 {
 	"queryPlanner" : {
 		"plannerVersion" : 1,
@@ -75,7 +75,7 @@ $ db.person.find({name: "Daniel", cpf: "12345678900"}).explain("executionStats")
 				},
 				{
 					"name" : {
-						"$eq" : "Daniel"
+						"$eq" : "danidr7"
 					}
 				}
 			]
@@ -172,7 +172,7 @@ $ db.person.find({name: "Daniel", cpf: "12345678900"}).explain("executionStats")
 		}
 	},
 	"serverInfo" : {
-		"host" : "PC-002387",
+		"host" : "my-host",
 		"port" : 27017,
 		"version" : "4.2.8",
 		"gitVersion" : "43d25964249164d76d5e04dd6cf38f6111e21f5f"
@@ -196,6 +196,8 @@ Já o estágio **IXSCAN** executa o *scanner* nas chaves do index, ou seja, se t
 
 Podemos notar que no *winningPlan* do exemplo existem 2 estágios, o de **FETCH** e o de **IXSCAN**. Então já sabemos que um índice está sendo usado, o nome do índice pode ser identificado no campo *indexName*.
 
+### executionStats
+
 Agora vamos dar uma olhada em alguns campos do *executionStats*:
 ```
 "executionStats" : {
@@ -213,59 +215,12 @@ Agora vamos dar uma olhada em alguns campos do *executionStats*:
 
 Levando em consideração os números do *executionStats*, podemos concluir que o resultado dessa consulta foi bom, pois para 1 resultado retornado foi examinado apenas 1 chave, ou seja, esse index cobre perfeitamente a consulta.
 
-Após concluir que a primeira query estava 'performando' corretamente, realizei a mesma análise da segunda query:
+Após concluir que a primeira query estava 'performando' corretamente, realizei a mesma análise da segunda query (para melhorar a visualização vamos abstrair o resultado):
 ```
 $ db.person.find({occupation: "programmer", cpf: "12345678900"}).explain("executionStats")
 {
-	"queryPlanner" : {
-		"plannerVersion" : 1,
-		"namespace" : "test.person",
-		"indexFilterSet" : false,
-		"parsedQuery" : {
-			"$and" : [
-				{
-					"cpf" : {
-						"$eq" : "12345678900"
-					}
-				},
-				{
-					"occupation" : {
-						"$eq" : "programmer"
-					}
-				}
-			]
-		},
-		"winningPlan" : {
-			"stage" : "FETCH",
-			"filter" : {
-				"cpf" : {
-					"$eq" : "12345678900"
-				}
-			},
-			"inputStage" : {
-				"stage" : "IXSCAN",
-				"keyPattern" : {
-					"occupation" : 1
-				},
-				"indexName" : "occupation_1",
-				"isMultiKey" : false,
-				"multiKeyPaths" : {
-					"occupation" : [ ]
-				},
-				"isUnique" : false,
-				"isSparse" : false,
-				"isPartial" : false,
-				"indexVersion" : 2,
-				"direction" : "forward",
-				"indexBounds" : {
-					"occupation" : [
-						"[\"programmer\", \"programmer\"]"
-					]
-				}
-			}
-		},
-		"rejectedPlans" : [ ]
-	},
+	...
+
 	"executionStats" : {
 		"executionSuccess" : true,
 		"nReturned" : 1,
@@ -325,19 +280,12 @@ $ db.person.find({occupation: "programmer", cpf: "12345678900"}).explain("execut
 				"dupsDropped" : 0
 			}
 		}
-	},
-	"serverInfo" : {
-		"host" : "PC-002387",
-		"port" : 27017,
-		"version" : "4.2.8",
-		"gitVersion" : "43d25964249164d76d5e04dd6cf38f6111e21f5f"
-	},
-	"ok" : 1
+	}
 }
 ```
 
-Podemos ver que, assim como na query anterior, no *winningPlan* temos o estágio de **IXSCAN** e o de **FETCH**, então sabemos que um índice está sendo usado.
-Vamos analisar o *executionStats*:
+Podemos ver que, assim como na query anterior, temos o estágio de **IXSCAN** e o de **FETCH**, então sabemos que um índice está sendo usado.
+Na raiz do *executionStats* podemos ver os seguintes números:
 ```
 "executionStats" : {
 		"nReturned" : 1,
@@ -377,7 +325,180 @@ No **IXSCAN** nota-se que foi usado o índice do campo *occupation*, porém fora
 			"nReturned" : 1,
 ```
 
-Agora no estágio **FETCH** o scanner precisou examinar todos os *799296* documentos para retornar apenas 1, ou seja, o scanner tá tendo muito documento para examinar, vamos tentar melhorar o índice para otimizar esse trabalho!
+Agora no estágio **FETCH** foi examinado todos os *799296* documentos para retornar apenas 1, ou seja, o estágio está examinando documentos demasiadamente, vamos tentar melhorar o índice para otimizar esse trabalho!
+
+```
+$ db.person.createIndex({cpf: 1, occupation: 1})
+{
+	"createdCollectionAutomatically" : false,
+	"numIndexesBefore" : 3,
+	"numIndexesAfter" : 4,
+	"ok" : 1
+}
+```
+
+Foi criado um índice composto de *cpf* e *occupation*, mas se já temos um índice de *occupation*, porquê não criar só mais um índice de *cpf*?
+O MongoDB ao criar o *winningPlan* vai selecionar apenas 1 índice para ser utilizado na consulta, então deve-se analisar bem quais campos são interessantes incluir no índice, o MongoDB suporta índices compostos de até 32 campos.
+
+Agora vamos ver como ficou a performance após a criação do novo índice:
+```
+$ db.person.find({occupation: "programmer", cpf: "12345678900"}).explain("executionStats")
+{
+	"queryPlanner" : {
+		"plannerVersion" : 1,
+		"namespace" : "test.person",
+		"indexFilterSet" : false,
+		"parsedQuery" : {
+			"$and" : [
+				{
+					"cpf" : {
+						"$eq" : "12345678900"
+					}
+				},
+				{
+					"occupation" : {
+						"$eq" : "programmer"
+					}
+				}
+			]
+		},
+		"winningPlan" : {
+			"stage" : "FETCH",
+			"inputStage" : {
+				"stage" : "IXSCAN",
+				"keyPattern" : {
+					"cpf" : 1,
+					"occupation" : 1
+				},
+				"indexName" : "cpf_1_occupation_1",
+				"isMultiKey" : false,
+				"multiKeyPaths" : {
+					"cpf" : [ ],
+					"occupation" : [ ]
+				},
+				"isUnique" : false,
+				"isSparse" : false,
+				"isPartial" : false,
+				"indexVersion" : 2,
+				"direction" : "forward",
+				"indexBounds" : {
+					"cpf" : [
+						"[\"12345678900\", \"12345678900\"]"
+					],
+					"occupation" : [
+						"[\"programmer\", \"programmer\"]"
+					]
+				}
+			}
+		},
+		"rejectedPlans" : [
+			{
+				"stage" : "FETCH",
+				"filter" : {
+					"cpf" : {
+						"$eq" : "12345678900"
+					}
+				},
+				"inputStage" : {
+					"stage" : "IXSCAN",
+					"keyPattern" : {
+						"occupation" : 1
+					},
+					"indexName" : "occupation_1",
+					"isMultiKey" : false,
+					"multiKeyPaths" : {
+						"occupation" : [ ]
+					},
+					"isUnique" : false,
+					"isSparse" : false,
+					"isPartial" : false,
+					"indexVersion" : 2,
+					"direction" : "forward",
+					"indexBounds" : {
+						"occupation" : [
+							"[\"programmer\", \"programmer\"]"
+						]
+					}
+				}
+			}
+		]
+	},
+	"executionStats" : {
+		"executionSuccess" : true,
+		"nReturned" : 1,
+		"executionTimeMillis" : 11,
+		"totalKeysExamined" : 1,
+		"totalDocsExamined" : 1,
+		"executionStages" : {
+			"stage" : "FETCH",
+			"nReturned" : 1,
+			"executionTimeMillisEstimate" : 10,
+			"works" : 3,
+			"advanced" : 1,
+			"needTime" : 0,
+			"needYield" : 0,
+			"saveState" : 0,
+			"restoreState" : 0,
+			"isEOF" : 1,
+			"docsExamined" : 1,
+			"alreadyHasObj" : 0,
+			"inputStage" : {
+				"stage" : "IXSCAN",
+				"nReturned" : 1,
+				"executionTimeMillisEstimate" : 10,
+				"works" : 2,
+				"advanced" : 1,
+				"needTime" : 0,
+				"needYield" : 0,
+				"saveState" : 0,
+				"restoreState" : 0,
+				"isEOF" : 1,
+				"keyPattern" : {
+					"cpf" : 1,
+					"occupation" : 1
+				},
+				"indexName" : "cpf_1_occupation_1",
+				"isMultiKey" : false,
+				"multiKeyPaths" : {
+					"cpf" : [ ],
+					"occupation" : [ ]
+				},
+				"isUnique" : false,
+				"isSparse" : false,
+				"isPartial" : false,
+				"indexVersion" : 2,
+				"direction" : "forward",
+				"indexBounds" : {
+					"cpf" : [
+						"[\"12345678900\", \"12345678900\"]"
+					],
+					"occupation" : [
+						"[\"programmer\", \"programmer\"]"
+					]
+				},
+				"keysExamined" : 1,
+				"seeks" : 1,
+				"dupsTested" : 0,
+				"dupsDropped" : 0
+			}
+		}
+	},
+	"serverInfo" : {
+		"host" : "my-host",
+		"port" : 27017,
+		"version" : "4.2.8",
+		"gitVersion" : "43d25964249164d76d5e04dd6cf38f6111e21f5f"
+	},
+	"ok" : 1
+}
+```
+
+
+
+
+
+
+Não adianta criarmos múltiplos índices de apenas um campo pensando que todos eles vão ser utilizados. Devemos ser cautelosos ao escolher os índices, pois isso também vai impactar na performance de escrita, para cada documento inserido na collection vai criado também uma nova chave para cada índice. [Você pode ler mais sobre a performance de escrita clicando aqui](https://docs.mongodb.com/manual/core/write-performance/).
 
 
 
