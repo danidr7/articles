@@ -288,10 +288,10 @@ Podemos ver que, assim como na query anterior, temos o estágio de **IXSCAN** e 
 Na raiz do *executionStats* podemos ver os seguintes números:
 ```
 "executionStats" : {
-		"nReturned" : 1,
-		"executionTimeMillis" : 1101,
-		"totalKeysExamined" : 799296,
-		"totalDocsExamined" : 799296,
+	"nReturned" : 1,
+	"executionTimeMillis" : 1101,
+	"totalKeysExamined" : 799296,
+	"totalDocsExamined" : 799296,
 ```
 
 Agora sim percebe-se nitidamente uma quantidade absurda de documentos analisados e um tempo de execução (*executionTimeMillis*) bem maior que na query anterior.
@@ -300,20 +300,20 @@ Para entender o que aconteceu, é necessário observar o *executionStages*.
 Como dito antes, o plano da query contém 2 estágios, vamos começar analisando o **IXSCAN** (a forma correta de leitura do plano é do estágio mais aninhado para fora):
 ```
 "inputStage" : {
-				"stage" : "IXSCAN",
-				"nReturned" : 799296,
-				"executionTimeMillisEstimate" : 18,
-				"works" : 799297,
-				"advanced" : 799296,
-				"needTime" : 0,
-				"needYield" : 0,
-				"saveState" : 6244,
-				"restoreState" : 6244,
-				"isEOF" : 1,
-				"keyPattern" : {
-					"occupation" : 1
-				},
-				"indexName" : "occupation_1",
+	"stage" : "IXSCAN",
+	"nReturned" : 799296,
+	"executionTimeMillisEstimate" : 18,
+	"works" : 799297,
+	"advanced" : 799296,
+	"needTime" : 0,
+	"needYield" : 0,
+	"saveState" : 6244,
+	"restoreState" : 6244,
+	"isEOF" : 1,
+	"keyPattern" : {
+		"occupation" : 1
+	},
+	"indexName" : "occupation_1",
 ```
 
 No **IXSCAN** nota-se que foi usado o índice do campo *occupation*, porém foram retornados *799296* documentos nesse estágio. O motivo desse resultado é que o índice contempla apenas 1 dos 2 campos pesquisados, então ele pode ajudar apenas filtrando o `occupation`, que por sua vez, retornou todos os *799296* documentos com *occupation* igual a *programmer*.
@@ -338,7 +338,7 @@ $ db.person.createIndex({cpf: 1, occupation: 1})
 ```
 
 Foi criado um índice composto de *cpf* e *occupation*, mas se já temos um índice de *occupation*, porquê não criar só mais um índice de *cpf*?
-O MongoDB ao criar o *winningPlan* vai selecionar apenas 1 índice para ser utilizado na consulta, então deve-se analisar bem quais campos são interessantes incluir no índice, o MongoDB suporta índices compostos de até 32 campos.
+O MongoDB ao criar o *winningPlan* vai selecionar apenas 1 índice para ser utilizado na consulta, então deve-se analisar bem quais campos são interessantes incluir no índice, atualmente o MongoDB suporta índices compostos de até 32 campos.
 
 Agora vamos ver como ficou a performance após a criação do novo índice:
 ```
@@ -493,6 +493,7 @@ $ db.person.find({occupation: "programmer", cpf: "12345678900"}).explain("execut
 }
 ```
 
+Podemos ver uma grande melhoria no tempo de resposta (*executionTimeMillis*) que passou de 1101ms para 11ms. No estágio de **IXSCAN** dentro do *executionStages* é apresentado que foi utilizado o índice composto que criamos anteriormente (*cpf_1_occupation_1*) e a quantidade de chaves retornadas para o estágio de **FETCH**, que foi apenas *1*. Já na consulta realizada antes de criar o índice composto, tivemos um retorno de *799296* no estágio de **IXSCAN**, ou seja, o índice criado funcionou adequadamente para essa consulta, passando a retornar apenas 1 documento neste mesmo estágio.
 
 
 
