@@ -101,7 +101,7 @@ $ db.person.find({name: "danidr7", cpf: "12345678900"}).explain("executionStats"
 				"direction" : "forward",
 				"indexBounds" : {
 					"name" : [
-						"[\"Daniel\", \"Daniel\"]"
+						"[\"danidr7\", \"danidr7\"]"
 					],
 					"cpf" : [
 						"[\"12345678900\", \"12345678900\"]"
@@ -158,7 +158,7 @@ $ db.person.find({name: "danidr7", cpf: "12345678900"}).explain("executionStats"
 				"direction" : "forward",
 				"indexBounds" : {
 					"name" : [
-						"[\"Daniel\", \"Daniel\"]"
+						"[\"danidr7\", \"danidr7\"]"
 					],
 					"cpf" : [
 						"[\"12345678900\", \"12345678900\"]"
@@ -181,9 +181,7 @@ $ db.person.find({name: "danidr7", cpf: "12345678900"}).explain("executionStats"
 }
 ```
 
-O `explain()` exibe bastante detalhes sobre a query executada, mas vou dar destaque para apenas algumas informações. [As informações detalhadas sobre cada campo pode ser consultada clicando aqui](https://docs.mongodb.com/manual/reference/explain-results/).
-
-#### winningPlan 
+O `explain()` exibe bastante detalhes sobre a consulta executada, mas vou dar destaque para 2 informações, o *winningPlan* e o *executionStats*. [As informações detalhadas sobre cada campo pode ser consultada clicando aqui](https://docs.mongodb.com/manual/reference/explain-results/).
 
 O *winningPlan* especifica o plano selecionado pelo otimizador de consultas do MongoDB, podendo ter de 1 até 3 estágios (*inputStage*).
 Dentro do *winningPlan* são especificados os estágios da consulta. Vamos abordar 3 tipos de estágios aqui:
@@ -196,8 +194,6 @@ Já o estágio **IXSCAN** executa o *scanner* nas chaves do index, ou seja, se t
 
 Podemos notar que no *winningPlan* do exemplo existem 2 estágios, o de **FETCH** e o de **IXSCAN**. Então já sabemos que um índice está sendo usado, o nome do índice pode ser identificado no campo *indexName*.
 
-### executionStats
-
 Agora vamos dar uma olhada em alguns campos do *executionStats*:
 ```
 "executionStats" : {
@@ -208,14 +204,14 @@ Agora vamos dar uma olhada em alguns campos do *executionStats*:
 	"totalDocsExamined" : 1,
 ```
 
-- **executionStats.nReturned**: é o número de documentos que a consulta retornou
-- **executionStats.executionTimeMillis**: é o tempo total da consulta
-- **executionStats.totalKeysExamined**: é o número de chaves examinadas, ou seja, vai ser maior que 0 quando o **IXSCAN** for usado
-- **executionStats.totalDocsExamined**: é o número de documentos examinados, quando o primeiro *stage* é de **FETCH**, então este será o mesmo número de documentos retornados
+- **nReturned**: é o número de documentos que a consulta retornou
+- **executionTimeMillis**: é o tempo total da consulta
+- **totalKeysExamined**: é o número de chaves examinadas, ou seja, vai ser maior que 0 quando o **IXSCAN** for usado
+- **totalDocsExamined**: é o número de documentos examinados durante a execução da consulta, normalmente documentos são examinados nos estágios de **FETCH** e **COLLSCAN**
 
-Levando em consideração os números do *executionStats*, podemos concluir que o resultado dessa consulta foi bom, pois para 1 resultado retornado foi examinado apenas 1 chave, ou seja, esse index cobre perfeitamente a consulta.
+Levando em consideração os números do *executionStats*, podemos concluir que o resultado dessa consulta foi bom, pois o estágio de **IXSCAN** filtrou as chaves de index de forma objetiva, retornando apenas 1 resultado para o estágio de **FETCH** retornar o documento.
 
-Após concluir que a primeira query estava 'performando' corretamente, realizei a mesma análise da segunda query (para melhorar a visualização vamos abstrair o resultado):
+Após concluir que a primeira *query* estava 'performando' corretamente, realizei a mesma análise da segunda *query* (para melhorar a visualização vamos abstrair o resultado):
 ```
 $ db.person.find({occupation: "programmer", cpf: "12345678900"}).explain("executionStats")
 {
@@ -284,7 +280,7 @@ $ db.person.find({occupation: "programmer", cpf: "12345678900"}).explain("execut
 }
 ```
 
-Podemos ver que, assim como na query anterior, temos o estágio de **IXSCAN** e o de **FETCH**, então sabemos que um índice está sendo usado.
+Podemos ver que, assim como na *query* anterior, temos o estágio de **IXSCAN** e o de **FETCH**, então sabemos que um índice está sendo usado.
 Na raiz do *executionStats* podemos ver os seguintes números:
 ```
 "executionStats" : {
@@ -294,10 +290,10 @@ Na raiz do *executionStats* podemos ver os seguintes números:
 	"totalDocsExamined" : 799296,
 ```
 
-Agora sim percebe-se nitidamente uma quantidade absurda de documentos analisados e um tempo de execução (*executionTimeMillis*) bem maior que na query anterior.
+Agora sim percebe-se nitidamente uma quantidade absurda de documentos analisados e um tempo de execução (*executionTimeMillis*) bem maior que na *query* anterior.
 
 Para entender o que aconteceu, é necessário observar o *executionStages*.
-Como dito antes, o plano da query contém 2 estágios, vamos começar analisando o **IXSCAN** (a forma correta de leitura do plano é do estágio mais aninhado para fora):
+Como dito antes, o plano desta *query* contém 2 estágios, vamos começar analisando o **IXSCAN** (a forma correta de leitura do plano é do estágio mais aninhado para fora):
 ```
 "inputStage" : {
 	"stage" : "IXSCAN",
@@ -316,7 +312,7 @@ Como dito antes, o plano da query contém 2 estágios, vamos começar analisando
 	"indexName" : "occupation_1",
 ```
 
-No **IXSCAN** nota-se que foi usado o índice do campo *occupation*, porém foram retornados *799296* documentos nesse estágio. O motivo desse resultado é que o índice contempla apenas 1 dos 2 campos pesquisados, então ele pode ajudar apenas filtrando o `occupation`, que por sua vez, retornou todos os *799296* documentos com *occupation* igual a *programmer*.
+No **IXSCAN** nota-se que foi usado o índice do campo *occupation*, porém foram retornados *799296* documentos nesse estágio. O motivo desse resultado é que o índice contempla apenas 1 dos 2 campos pesquisados, então ele pode ajudar apenas filtrando o campo `occupation`, que por sua vez, retornou todos os *799296* documentos com *occupation* igual a *programmer*.
 
 ```
 "executionStages" : {
@@ -493,14 +489,13 @@ $ db.person.find({occupation: "programmer", cpf: "12345678900"}).explain("execut
 }
 ```
 
-Podemos ver uma grande melhoria no tempo de resposta (*executionTimeMillis*) que passou de 1101ms para 11ms. No estágio de **IXSCAN** dentro do *executionStages* é apresentado que foi utilizado o índice composto que criamos anteriormente (*cpf_1_occupation_1*) e a quantidade de chaves retornadas para o estágio de **FETCH**, que foi apenas *1*. Já na consulta realizada antes de criar o índice composto, tivemos um retorno de *799296* no estágio de **IXSCAN**, ou seja, o índice criado funcionou adequadamente para essa consulta, passando a retornar apenas 1 documento neste mesmo estágio.
+Podemos ver uma grande melhoria no tempo de resposta (*executionTimeMillis*) que passou de 1101ms para 11ms. No estágio de **IXSCAN** dentro do *executionStages* é apresentado que foi utilizado o índice composto que criamos anteriormente (*cpf_1_occupation_1*) e a quantidade de chaves retornadas para o estágio de **FETCH**, que foi apenas *1*. Já na consulta realizada antes de criar o índice composto, tivemos um retorno de *799296* no estágio de **IXSCAN**, ou seja, o índice criado funcionou adequadamente para essa consulta, passando a retornar apenas 1 chave neste mesmo estágio.
 
+Outro campo interessante a se notar é o *rejectedPlans*, ele indica planos de consulta que eram candidatos a serem utilizados, mas o otimizador de consultas do MongoDB acabou rejeitando-o e optando por outro plano no qual considerou mais performático.
+No *rejectedPlans* da nossa última consulta possui um plano utilizando o índice antigo *occupation_1*, nesse caso o índice não é mais útil nas consultas, então o melhor a se fazer é remover ele da collection.
 
+#### Considerações finais
 
+Devemos ser sempre cautelosos ao escolher os índices e lembrar que o MongoDB utiliza apenas 1 índice por consulta. A quantidade de índices também vai impactar na performance de escrita e para cada documento inserido na collection vai ser criado também uma nova chave para cada índice. [Você pode ler mais sobre a performance de escrita clicando aqui](https://docs.mongodb.com/manual/core/write-performance/).
 
-
-Não adianta criarmos múltiplos índices de apenas um campo pensando que todos eles vão ser utilizados. Devemos ser cautelosos ao escolher os índices, pois isso também vai impactar na performance de escrita, para cada documento inserido na collection vai criado também uma nova chave para cada índice. [Você pode ler mais sobre a performance de escrita clicando aqui](https://docs.mongodb.com/manual/core/write-performance/).
-
-
-
-----`WIP`----
+Para fins de análise da *query* o *explain* é um grande aliado, podendo nos dar um visão clara do que acontece na execução da *query*. Porém muitas vezes a má performance das *queries* não é evidente, para isso temos algumas ferramentas no mercado que podem nos ajudar a identificar isso em um contexto mais amplo, como o [prometheus](https://prometheus.io/docs/instrumenting/exporters/) e o [sysdig](https://docs.sysdig.com/en/mongodb.html).
